@@ -1,0 +1,7 @@
+opencv-python
+pillow
+pytesseract
+imutils
+numpy
+datetime
+requests
