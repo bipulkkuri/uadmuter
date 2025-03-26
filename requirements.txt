@@ -5,3 +5,6 @@ imutils
 numpy
 datetime
 requests
+black
+ruff
+pylint
