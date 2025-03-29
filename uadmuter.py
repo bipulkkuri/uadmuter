@@ -9,8 +9,8 @@
 # The script is designed to run continuously in an infinite loop, with a delay between iterations.
 # The script can be stopped by interrupting the execution (e.g., using Ctrl+C).
 # The script is intended to be run on a system with a webcam and an active internet connection.
-# The script requires the pytesseract, OpenCV, and requests libraries to be installed. 
-""" Imports """
+# The script requires the pytesseract, OpenCV, and requests libraries to be installed.
+"""Imports"""
 import time
 import datetime
 import sys
@@ -20,23 +20,33 @@ import pytesseract
 from PIL import Image
 import requests
 from dotenv import load_dotenv
-from utils.config_reader import read_config,read_config_int
+from utils.config_reader import read_config, read_config_int, read_config_bool
+from utils.ocr_helper import preprocess_image
 
 
-
-MUTE_FLAG = False # Global variable to track mute status
+MUTE_FLAG = False  # Global variable to track mute status
 # Load environment variables from .env file
 load_dotenv()
-UN_MUTE_WEBHOOK = os.getenv("UN_MUTE_WEBHOOK") 
+UN_MUTE_WEBHOOK = os.getenv("UN_MUTE_WEBHOOK")
 CONFIG_FILE = os.getenv("CONFIG_FILE")
 if not CONFIG_FILE:
     raise ValueError("CONFIG_FILE environment variable is not set.")
-HOMEASSISTANT_TIMEOUT=read_config_int(CONFIG_FILE,'HOMEASSISTANT','HOMEASSISTANT_TIMEOUT')
-IMAGE_NAME = read_config(CONFIG_FILE,'CAMERA','IMAGE_NAME')
-CAM_INDEX = read_config_int(CONFIG_FILE,'CAMERA','CAM_INDEX')
-SLEEP_TIME = read_config_int(CONFIG_FILE,'CAMERA','SLEEP_TIME')
-SEARCH_STRING_LIST= read_config(CONFIG_FILE,'CAMERA','SEARCH_STRING_LIST')
+HOMEASSISTANT_TIMEOUT = read_config_int(
+    CONFIG_FILE, "HOMEASSISTANT", "HOMEASSISTANT_TIMEOUT"
+)
+IMAGE_NAME = read_config(CONFIG_FILE, "CAMERA", "IMAGE_NAME")
+CAM_INDEX = read_config_int(CONFIG_FILE, "CAMERA", "CAM_INDEX")
+SLEEP_TIME = read_config_int(CONFIG_FILE, "CAMERA", "SLEEP_TIME")
+CAM_ENABLED = read_config_bool(CONFIG_FILE, "CAMERA", "ENABLED")
+
+SEARCH_STRING_LIST = read_config(CONFIG_FILE, "CAMERA", "SEARCH_STRING_LIST")
 search_string_list = SEARCH_STRING_LIST.split(",")
+print("Search string list", search_string_list)
+print("Image name", IMAGE_NAME)
+print("Camera index", CAM_INDEX)
+print("Sleep time", SLEEP_TIME)
+print("Camera enabled", CAM_ENABLED)
+
 
 def list_cameras():
     """
@@ -65,7 +75,7 @@ def list_cameras():
     return available_cameras
 
 
-def get_camera_info(index)  -> str:
+def get_camera_info(index) -> str:
     """
     Retrieves information about a camera device at the specified index.
 
@@ -124,73 +134,10 @@ def capture_image(imagePath) -> None:
 
 
 def getTextFromImage(imagePath: str) -> bool:
-    """
-    Extracts text from an image file and determines if the text meets certain criteria.
-
-    This function uses OpenCV and Tesseract OCR to process the image and extract text.
-    It applies various preprocessing techniques and OCR configurations to improve text
-    recognition accuracy. The extracted text is then evaluated using the `is_Text_Image`
-    function to determine if it meets specific conditions.
-
-    Args:
-        imagePath (str): The file path to the image from which text needs to be extracted.
-
-    Returns:
-        bool: True if the extracted text meets the criteria defined in `is_Text_Image`,
-              otherwise False.
-
-    Notes:
-        - The function uses multiple OCR configurations (`--psm` and `tessedit_char_whitelist`)
-          to enhance text recognition.
-        - Preprocessing techniques such as grayscale conversion, noise removal, and thresholding
-          are applied to improve OCR results.
-        - The `is_Text_Image` function is assumed to be defined elsewhere and is used to evaluate
-          the extracted text.
-    """
-    # Open the image file
-    img = cv2.imread(imagePath)
-    # Convert the image to gray scale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Use pytesseract to get the text from the image
-    # text = pytesseract.image_to_string(gray)
-
-    # LOGICS to get the text from the image via different algos and settings Enhance for future
-    # remove noise
-    img = cv2.medianBlur(img, 5)
-    text = pytesseract.image_to_string(
-        img,
-        config="--psm 7 -c tessedit_char_whitelist=abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    )
+    text = preprocess_image(imagePath)
     flag = is_text_image(text)
     if flag:
         return flag
-
-    text = pytesseract.image_to_string(
-        Image.open(imagePath),
-        config="--psm 6 -c tessedit_char_whitelist=abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    )
-    flag = is_text_image(text)
-    if flag:
-        return flag
-
-    text = pytesseract.image_to_string(
-        Image.open(imagePath),
-        config="--psm 9 -c tessedit_char_whitelist=abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    )
-    flag = is_text_image(text)
-    if flag:
-        return flag
-
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)  # Reduce noise
-    thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[
-        1
-    ]  # Apply thresholding
-    text = pytesseract.image_to_string(thresh, lang="eng")
-    flag = is_text_image(text)
-    if flag:
-        return flag
-
     return False
 
 
@@ -205,7 +152,7 @@ def is_text_image(image_text: str) -> bool:
         bool: True if any of the search strings are found in the image text, False otherwise.
 
     Notes:
-        - The input text is stripped of leading/trailing whitespace and normalized by 
+        - The input text is stripped of leading/trailing whitespace and normalized by
           replacing line breaks with spaces before performing the search.
         - The function relies on a predefined list of search strings (`search_string_list`).
     """
@@ -232,13 +179,15 @@ def run() -> None:
     3. Based on the result of the text extraction:
        - Issues a "mute" command if the flag is True.
        - Issues an "unmute" command if the flag is False.
-    """
 
-    try:
-        capture_image(IMAGE_NAME)
-    except Exception as e:
-        print("Error in capturing image", e)
-        sys.exit()
+    """
+    if CAM_ENABLED:
+        try:
+
+            capture_image(IMAGE_NAME)
+        except Exception as e:
+            print("Error in capturing image", e)
+            sys.exit()
 
     flag = getTextFromImage(IMAGE_NAME)
 
@@ -248,12 +197,12 @@ def run() -> None:
         issue_command("unmute")
 
 
-def issue_command(mycommand: str) -> None: 
+def issue_command(mycommand: str) -> None:
     """
     Executes a command to mute or unmute based on the provided input.
 
     Args:
-        mycommand (str): The command to execute. 
+        mycommand (str): The command to execute.
                          Acceptable values are:
                          - "mute": Mutes the system if it is not already muted.
                          - "unmute": Unmutes the system.
@@ -286,7 +235,7 @@ def mute():
         now = datetime.datetime.now()
         formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
         print("Mute the video", formatted_date_time)
-        requests.get(UN_MUTE_WEBHOOK,timeout=HOMEASSISTANT_TIMEOUT)
+        requests.get(UN_MUTE_WEBHOOK, timeout=HOMEASSISTANT_TIMEOUT)
         global MUTE_FLAG
         MUTE_FLAG = True
     except Exception as e:
@@ -320,7 +269,7 @@ def unmute():
             now = datetime.datetime.now()
             formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
             print("UnMute the video", formatted_date_time)
-            requests.get(UN_MUTE_WEBHOOK,timeout=HOMEASSISTANT_TIMEOUT)
+            requests.get(UN_MUTE_WEBHOOK, timeout=HOMEASSISTANT_TIMEOUT)
             MUTE_FLAG = False
     except Exception as e:
         print("Error in calling the unmute webhook", e)
