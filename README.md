@@ -47,6 +47,12 @@ actions:
 mode: single
 
 ```
+set up the .env file with webhook url  
+
+```
+UN_MUTE_WEBHOOK = ""
+CONFIG_FILE = "configs/local_config.ini" 
+``` 
 
 ###First Run
 ```

@@ -14,21 +14,29 @@
 import time
 import datetime
 import sys
+import os
 import cv2
 import pytesseract
 from PIL import Image
 import requests
+from dotenv import load_dotenv
+from utils.config_reader import read_config,read_config_int
 
 
-search_string_list = ["skip", "Sponsored", "Ad", "skip in"]
-SLEEP_TIME = 5
-CAM_INDEX = 1  # this is my old iphone camera
-IMAGE_NAME = "picture.png"
-# MUTE UNMUTE WEBHOOK
-UN_MUTE_WEBHOOK = "<<FILL YOUR WEBHOOK URL>>"
-MUTE_FLAG = False
-HOMEASSISTANT_TIMEOUT=2
 
+MUTE_FLAG = False # Global variable to track mute status
+# Load environment variables from .env file
+load_dotenv()
+UN_MUTE_WEBHOOK = os.getenv("UN_MUTE_WEBHOOK") 
+CONFIG_FILE = os.getenv("CONFIG_FILE")
+if not CONFIG_FILE:
+    raise ValueError("CONFIG_FILE environment variable is not set.")
+HOMEASSISTANT_TIMEOUT=read_config_int(CONFIG_FILE,'HOMEASSISTANT','HOMEASSISTANT_TIMEOUT')
+IMAGE_NAME = read_config(CONFIG_FILE,'CAMERA','IMAGE_NAME')
+CAM_INDEX = read_config_int(CONFIG_FILE,'CAMERA','CAM_INDEX')
+SLEEP_TIME = read_config_int(CONFIG_FILE,'CAMERA','SLEEP_TIME')
+SEARCH_STRING_LIST= read_config(CONFIG_FILE,'CAMERA','SEARCH_STRING_LIST')
+search_string_list = SEARCH_STRING_LIST.split(",")
 
 def list_cameras():
     """

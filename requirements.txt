@@ -5,6 +5,7 @@ imutils
 numpy
 datetime
 requests
+python-dotenv
 black
 ruff
 pylint
