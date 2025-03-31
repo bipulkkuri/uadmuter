@@ -21,9 +21,32 @@ import cv2
 import multiprocessing
 import requests
 import utils.constants as CONSTANTS
-
+import logging
+import logging.handlers
 
 from utils.ocr_helper import get_gam_text, get_gag_text, get_otsu_text
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Create a rotating file handler
+log_filename = 'logs/my_app.log'
+log_max_size = 1024 * 1024  # 1MB
+log_backup_count = 5  # Keep 5 backup files
+
+rotating_handler = logging.handlers.RotatingFileHandler(
+    log_filename, 
+    maxBytes=log_max_size, 
+    backupCount=log_backup_count
+)
+
+# Set the logging format
+log_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+rotating_handler.setFormatter(log_format)
+
+# Add the handler to the root logger
+logger = logging.getLogger()
+logger.addHandler(rotating_handler)
 
 MUTE_FLAG = False  # Global variable to track mute status
 # Load environment variables from .env file
@@ -76,7 +99,7 @@ def get_camera_info(index) -> str:
         return "None"
 
     backend_name = cap.getBackendName()
-    print(f"Backend name: {backend_name}")
+    logging.info(f"Backend name: {backend_name}")
 
 
 def capture_image(imagePath) -> None:
@@ -136,7 +159,7 @@ def process_image(image_path) -> bool:
     results = run_algorithms_parallel(algorithms_to_test, image_path)
     for name, result, runtime in results:
         result = result.strip()
-        print(f"Algorithm: {name}, Result: {result}, Runtime: {runtime:.4f} seconds")
+        logging.debug(f"Algorithm: {name}, Result: {result}, Runtime: {runtime:.4f} seconds")
         flag = is_text_image(result)
         if flag:
             return flag
@@ -163,8 +186,8 @@ def is_text_image(image_text: str) -> bool:
     image_text = " ".join(image_text.splitlines())
     # Check if any search string is in the image text
     for search_string in CONSTANTS.search_string_list:
-        if search_string in image_text:
-            print("Text found in the image -- ", search_string)
+        if search_string.lower() in image_text.lower():
+            logging.info("Text found in the image -- ", search_string)
             return True
     return False
 
@@ -187,7 +210,7 @@ def run() -> None:
         try:
             capture_image(CONSTANTS.IMAGE_NAME)
         except Exception as e:
-            print("Error in capturing image", e)
+            logging.error("Error in capturing image", e)
             sys.exit()
 
     flag = getTextFromImage(CONSTANTS.IMAGE_NAME)
@@ -217,7 +240,7 @@ def issue_command(mycommand: str) -> None:
     elif mycommand == "unmute":
         unmute()
     else:
-        print(f"nothing to do,{mycommand} is {MUTE_FLAG}")
+        logging.info(f"nothing to do,{mycommand} is {MUTE_FLAG}")
 
 
 def mute():
@@ -237,12 +260,12 @@ def mute():
     try:
         now = datetime.datetime.now()
         formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-        print("Mute the video", formatted_date_time)
+        logging.info("Mute the video", formatted_date_time)
         requests.get(CONSTANTS.UN_MUTE_WEBHOOK, timeout=CONSTANTS.HOMEASSISTANT_TIMEOUT)
         global MUTE_FLAG
         MUTE_FLAG = True
     except Exception as e:
-        print("Error in calling the mute webhook", e)
+        logging.error("Error in calling the mute webhook", e)
 
 
 def unmute():
@@ -270,13 +293,13 @@ def unmute():
         if MUTE_FLAG:
             now = datetime.datetime.now()
             formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-            print("UnMute the video", formatted_date_time)
+            logging.info("UnMute the video", formatted_date_time)
             requests.get(
                 CONSTANTS.UN_MUTE_WEBHOOK, timeout=CONSTANTS.HOMEASSISTANT_TIMEOUT
             )
             MUTE_FLAG = False
     except Exception as e:
-        print("Error in calling the unmute webhook", e)
+        logging.error("Error in calling the unmute webhook", e)
 
 
 def main():
@@ -289,6 +312,7 @@ def main():
         - The loop currently runs indefinitely.
         - Future enhancements may include adding a keyboard event to stop the loop.
     """
+    logging.info("Starting app")
     list_cameras()
     while True:
         run()

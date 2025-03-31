@@ -25,6 +25,7 @@ env/
 venv/
 ENV/
 *.log
+logs/
 
 # Unit test / coverage reports
 htmlcov/
@@ -53,3 +54,4 @@ mypy-report/
 tmp/
 
 .DS_Store
+images/
