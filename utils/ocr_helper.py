@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import pytesseract
+from PIL import Image
 
 
 def global_threshold(image, threshold=127):
@@ -81,13 +82,6 @@ def otsu_threshold(image):
     return binary_image
 
 
-def preprocess_image(image_path) -> str:
-    image = cv.imread(image_path)
-    bimage = get_otsu_threshold(image)
-    text = get_otsu_text_image(bimage)
-    return text
-
-
 def get_blur_image(image):
     gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     blurred_image = cv.GaussianBlur(gray_image, (5, 5), 0)
@@ -112,19 +106,41 @@ def get_otsu_threshold(image):
     return binary_image
 
 
-def get_otsu_text_image(image) -> str:
+def get_gam_text(image_path) -> str:
+    image = cv.imread(image_path)
+    bimage = get_adaptive_mean_threshold(image)
+    text = get_text_image(bimage)
+    return text
 
+
+def get_gag_text(image_path) -> str:
+    image = cv.imread(image_path)
+    bimage = get_adaptive_gaussian_threshold(image)
+    text = get_text_image(bimage)
+    return text
+
+
+def get_otsu_text(image_path) -> str:
+    image = cv.imread(image_path)
+    bimage = get_otsu_threshold(image)
+    text = get_text_image(bimage)
+    return text
+
+
+def get_text_image(image) -> str:
     ALPHA_NUM_TEXT = "tessedit_char_whitelist=abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     custom_config = "--psm 6 -c " + ALPHA_NUM_TEXT
     # Extract text using Tesseract OCR
     text = pytesseract.image_to_string(image, config=custom_config)
+    text = text.replace("\r\n", "").replace("\n", "")
 
     return text
 
 
 def main():
-    text = preprocess_image("picture.png")
-    print("Extracted Text:", text)
+    image_path = "images/picture.png"
+    text = get_otsu_text(image_path)
+    print(text)
 
 
 if __name__ == "__main__":
